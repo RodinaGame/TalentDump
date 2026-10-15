@@ -330,8 +330,10 @@ local function PlaceButtons()
 	b2:ClearAllPoints()
 
 	if atlas and parent == atlas then
-		b2:SetPoint("TOPLEFT", atlas, "TOPLEFT", 18, -52)
+		b2:SetPoint("BOTTOMLEFT", atlas, "BOTTOMLEFT", 200, 58)
 		b1:SetPoint("LEFT", b2, "RIGHT", 6, 0)
+		b1:SetFrameLevel((parent:GetFrameLevel() or 1) + 50)
+		b2:SetFrameLevel((parent:GetFrameLevel() or 1) + 50)
 	else
 		b1:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -100, -28)
 		b2:SetPoint("RIGHT", b1, "LEFT", -6, 0)
