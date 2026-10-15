@@ -14,6 +14,7 @@ local OPTION_KEYS = {
 	"bags",
 	"bank",
 	"spellbook",
+	"trainer",
 }
 
 local OPTION_LABELS = {
@@ -24,6 +25,7 @@ local OPTION_LABELS = {
 	bags        = "Bags",
 	bank        = "Bank",
 	spellbook   = "Spellbook",
+	trainer     = "Trainer (open)",
 }
 
 local function EnsureDB()
@@ -34,6 +36,7 @@ local function EnsureDB()
 	if TalentDumpDB.bags == nil then TalentDumpDB.bags = false end
 	if TalentDumpDB.bank == nil then TalentDumpDB.bank = false end
 	if TalentDumpDB.spellbook == nil then TalentDumpDB.spellbook = false end
+	if TalentDumpDB.trainer == nil then TalentDumpDB.trainer = false end
 	-- migrate old keys if present
 	if TalentDumpDB.includeBags ~= nil then
 		TalentDumpDB.bags = TalentDumpDB.includeBags and true or false
@@ -323,6 +326,104 @@ local function BuildSpellbook(output)
 	end
 end
 
+local function IsTrainerOpen()
+	if ClassTrainerFrame and ClassTrainerFrame:IsVisible() then return true end
+	if TradeSkillFrame and TradeSkillFrame:IsVisible() and IsTradeskillTrainer and IsTradeskillTrainer() then return true end
+	-- some UIs keep the API alive while talking to trainer
+	local n = GetNumTrainerServices and GetNumTrainerServices() or 0
+	return n > 0
+end
+
+local function FormatMoneyCopper(copper)
+	copper = copper or 0
+	local g = math.floor(copper / 10000)
+	local s = math.floor((copper - g * 10000) / 100)
+	local c = copper - math.floor(copper / 100) * 100
+	if g > 0 then
+		return string.format("%dg %ds %dc", g, s, c)
+	elseif s > 0 then
+		return string.format("%ds %dc", s, c)
+	else
+		return string.format("%dc", c)
+	end
+end
+
+local function BuildTrainer(output)
+	Append(output, "================================")
+	Append(output, "TRAINER (spells offered for purchase)")
+	Append(output, "================================")
+
+	if not GetNumTrainerServices then
+		Append(output, "Trainer API not available.")
+		Append(output, "")
+		return
+	end
+
+	local num = GetNumTrainerServices() or 0
+	if num == 0 or not IsTrainerOpen() then
+		Append(output, "Trainer window is not open (or no services).")
+		Append(output, "Open a class/profession trainer, then dump again.")
+		Append(output, "")
+		return
+	end
+
+	-- Try to show available + unavailable (not yet bought)
+	if SetTrainerServiceTypeFilter then
+		SetTrainerServiceTypeFilter("available", 1)
+		SetTrainerServiceTypeFilter("unavailable", 1)
+		SetTrainerServiceTypeFilter("used", 0)
+	end
+	num = GetNumTrainerServices() or 0
+
+	Append(output, "Total entries: " .. num)
+	Append(output, "")
+
+	local i = 1
+	while i <= num do
+		local name, rank, category = GetTrainerServiceInfo(i)
+		category = category or "?"
+
+		if category == "header" then
+			Append(output, "### " .. (name or "Header"))
+		else
+			local cost = GetTrainerServiceCost and GetTrainerServiceCost(i) or 0
+			local levelReq = GetTrainerServiceLevelReq and GetTrainerServiceLevelReq(i) or 0
+			local skill, skillRank = nil, nil
+			if GetTrainerServiceSkillReq then
+				skill, skillRank = GetTrainerServiceSkillReq(i)
+			end
+
+			local rankStr = (rank and rank ~= "" and rank) or ""
+			local line = "Spell: " .. (name or "?")
+			if rankStr ~= "" then
+				line = line .. " (" .. rankStr .. ")"
+			end
+			line = line .. " | status: " .. category
+			line = line .. " | cost: " .. FormatMoneyCopper(cost)
+			if levelReq and levelReq > 0 then
+				line = line .. " | lvl: " .. levelReq
+			end
+			if skill then
+				line = line .. " | skill: " .. skill
+				if skillRank then
+					line = line .. " " .. skillRank
+				end
+			end
+			Append(output, line)
+
+			-- Description if available (1.12 may need service selected)
+			if GetTrainerServiceDescription then
+				local desc = GetTrainerServiceDescription(i)
+				if desc and desc ~= "" then
+					Append(output, "  " .. desc)
+				end
+			end
+		end
+		i = i + 1
+	end
+	Append(output, "")
+end
+
 --------------------------------------------------
 -- Build dump from selected options
 --------------------------------------------------
@@ -357,6 +458,7 @@ local function BuildDump()
 	if TalentDumpDB.bags then BuildBags(output) end
 	if TalentDumpDB.bank then BuildBank(output) end
 	if TalentDumpDB.spellbook then BuildSpellbook(output) end
+	if TalentDumpDB.trainer then BuildTrainer(output) end
 
 	Append(output, "================================")
 	Append(output, "END OF DUMP")
@@ -428,7 +530,7 @@ end
 
 local panel = CreateFrame("Frame", "TalentDumpPanel", UIParent)
 panel:SetWidth(220)
-panel:SetHeight(280)
+panel:SetHeight(305)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 80)
 panel:SetBackdrop({
 	bgFile = "Interface/Tooltips/UI-Tooltip-Background",

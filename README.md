@@ -15,6 +15,7 @@ Authors: **Grok**, **Rodina**
   - Bags
   - Bank (requires open bank window)
   - **Spellbook** (all spells with ranks and tooltip descriptions)
+  - **Trainer** (spells offered by open trainer — buy now vs wait)
 - Dump window for Ctrl+A / Ctrl+C
 
 ## Usage
@@ -39,5 +40,6 @@ Slash commands:
 ## Notes
 
 - Bank data is only available while the bank UI is open
+- Trainer data requires an open trainer window
 - Spellbook dump is useful for reviewing LazyScript rotations
 - BCS section requires BetterCharacterStats (optional)

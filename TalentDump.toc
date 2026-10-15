@@ -1,8 +1,8 @@
 ## Interface: 11200
 ## Title: Talent Dump
-## Notes: Customizable character dump: equipment, talents, BCS, bags, bank, spellbook. /talentdump
+## Notes: Customizable character dump: equipment, talents, BCS, bags, bank, spellbook, trainer. /talentdump
 ## Author: Grok, Rodina
-## Version: 2.0
+## Version: 2.1
 ## SavedVariables: TalentDumpDB
 
 TalentDump.lua
