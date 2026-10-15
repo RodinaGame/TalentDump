@@ -1,45 +1,39 @@
-# TalentDump
+# TalentDump v3.0
 
-Customizable character dump addon for **World of Warcraft 1.12.1** (Vanilla / Vanilla+).
+Modular character dump for **WoW 1.12 / Vanilla+**.
 
 Authors: **Grok**, **Rodina**
 
-## Features
+## Modules
 
-- Minimap button opens an options panel
-- Select what to dump with checkboxes:
-  - Equipment
-  - Talents (taken only)
-  - Talents (full tree, including 0/x)
-  - BCS stats (BetterCharacterStats)
-  - Bags
-  - Bank (requires open bank window)
-  - **Spellbook** (all spells with ranks and tooltip descriptions)
-  - **Trainer** (spells offered by open trainer — buy now vs wait)
-- Dump window for Ctrl+A / Ctrl+C
+| File | Role |
+|------|------|
+| `TalentDump_Core.lua` | Namespace, DB, helpers |
+| `TalentDump_Sections.lua` | Equipment, talents, BCS, bags, bank, spellbook, trainer |
+| `TalentDump_AtlasLoot.lua` | AtlasLoot boss / instance loot dump buttons |
+| `TalentDump_UI.lua` | Minimap, options panel, copy window, slash |
 
-## Usage
+## Character dump
 
-1. Click the minimap button (book icon), or type `/talentdump`
-2. Tick the sections you need
-3. Press **Dump**
-4. Copy the text from the window
+Minimap button or `/talentdump` → checkboxes → **Dump**.
 
-Slash commands:
-- `/talentdump` — toggle options panel
-- `/talentdump dump` — run dump with current settings
-- `/fulldump` — same as `/talentdump`
+## AtlasLoot dump
 
-## Installation
+With **AtlasLoot** open:
 
-1. Download / clone this repository
-2. Copy the folder into `World of Warcraft\Interface\AddOns` as `TalentDump`
-3. Ensure the folder contains `TalentDump.toc` and `TalentDump.lua`
-4. Restart the client or `/reload`
+- **Dump Boss** — loot for the currently selected boss
+- **Dump Inst** — all bosses on the current Atlas map
 
-## Notes
+Slash:
 
-- Bank data is only available while the bank UI is open
-- Trainer data requires an open trainer window
-- Spellbook dump is useful for reviewing LazyScript rotations
-- BCS section requires BetterCharacterStats (optional)
+- `/talentdump boss`
+- `/talentdump inst`
+
+## Update
+
+```bat
+cd /d c:\\Vanillaplus\\Interface\\AddOns\\TalentDump
+git pull
+```
+
+Then `/reload` in game.

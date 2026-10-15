@@ -1,8 +1,12 @@
 ## Interface: 11200
 ## Title: Talent Dump
-## Notes: Customizable character dump: equipment, talents, BCS, bags, bank, spellbook, trainer. /talentdump
+## Notes: Modular character + AtlasLoot dump. /talentdump
 ## Author: Grok, Rodina
-## Version: 2.1
+## Version: 3.0
 ## SavedVariables: TalentDumpDB
+## OptionalDeps: AtlasLoot, Atlas, BetterCharacterStats
 
-TalentDump.lua
+TalentDump_Core.lua
+TalentDump_Sections.lua
+TalentDump_AtlasLoot.lua
+TalentDump_UI.lua
