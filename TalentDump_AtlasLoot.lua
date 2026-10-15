@@ -5,6 +5,13 @@
 
 TalentDump = TalentDump or {}
 
+-- Shared / non-boss tables to skip in full-instance dump
+local SKIP_TABLES = {
+	VanillaKeys = true,
+	LunarFestival1 = true,
+	LunarFestival2 = true,
+}
+
 local function ResolveDataSource(dataID)
 	if AtlasLoot_TableNames and AtlasLoot_TableNames[dataID] then
 		return AtlasLoot_TableNames[dataID][2] or "AtlasLootItems"
@@ -36,13 +43,28 @@ local function GetLootTable(dataID)
 	if AtlasLoot_Data and AtlasLoot_Data[src] and AtlasLoot_Data[src][dataID] then
 		return AtlasLoot_Data[src][dataID], src
 	end
-	local try = { "AtlasLootItems", "AtlasLootWBItems", "AtlasLootSetItems", "AtlasLootCrafting", "AtlasLootGeneral" }
+	local try = {
+		"AtlasLootItems",
+		"AtlasLootWBItems",
+		"AtlasLootSetItems",
+		"AtlasLootCrafting",
+		"AtlasLootGeneral",
+		"AtlasLootBP",
+		"AtlasLootRuins",
+	}
 	local i = 1
 	while i <= table.getn(try) do
 		if AtlasLoot_Data and AtlasLoot_Data[try[i]] and AtlasLoot_Data[try[i]][dataID] then
 			return AtlasLoot_Data[try[i]][dataID], try[i]
 		end
 		i = i + 1
+	end
+	if AtlasLoot_Data then
+		for dsName, ds in pairs(AtlasLoot_Data) do
+			if type(ds) == "table" and ds[dataID] then
+				return ds[dataID], dsName
+			end
+		end
 	end
 	return nil, src
 end
@@ -101,12 +123,54 @@ function TalentDump.DumpBossLootTable(output, dataID, bossTitle)
 end
 
 function TalentDump.GetCurrentBossDataID()
+	local zoneID = GetCurrentZoneID()
+
+	if zoneID and AtlasLootBossButtons and AtlasLootBossButtons[zoneID]
+		and AtlasLootItemsFrame and AtlasLootItemsFrame.activeBoss then
+		local idx = AtlasLootItemsFrame.activeBoss
+		local dataID = AtlasLootBossButtons[zoneID][idx]
+		if dataID and dataID ~= "" then
+			return dataID, ResolveBossName(dataID)
+		end
+	end
+
+	if AtlasLootItemsFrame and AtlasLootItemsFrame.refresh
+		and AtlasLootItemsFrame.refresh[1]
+		and AtlasLootItemsFrame.refresh[1] ~= "" then
+		local dataID = AtlasLootItemsFrame.refresh[1]
+		local text = AtlasLootItemsFrame.refresh[3]
+		if zoneID and AtlasLootBossButtons and AtlasLootBossButtons[zoneID] then
+			local ok = false
+			local bosses = AtlasLootBossButtons[zoneID]
+			local i = 1
+			while i <= table.getn(bosses) do
+				if bosses[i] == dataID then ok = true break end
+				i = i + 1
+			end
+			if ok then
+				return dataID, text or ResolveBossName(dataID)
+			end
+		else
+			return dataID, text or ResolveBossName(dataID)
+		end
+	end
+
 	if AtlasLootCharDB and AtlasLootCharDB.LastBoss and AtlasLootCharDB.LastBoss ~= "" then
-		return AtlasLootCharDB.LastBoss, AtlasLootCharDB.LastBossText
+		local dataID = AtlasLootCharDB.LastBoss
+		if zoneID and AtlasLootBossButtons and AtlasLootBossButtons[zoneID] then
+			local bosses = AtlasLootBossButtons[zoneID]
+			local i = 1
+			while i <= table.getn(bosses) do
+				if bosses[i] == dataID then
+					return dataID, AtlasLootCharDB.LastBossText or ResolveBossName(dataID)
+				end
+				i = i + 1
+			end
+		else
+			return dataID, AtlasLootCharDB.LastBossText
+		end
 	end
-	if AtlasLootItemsFrame and AtlasLootItemsFrame.refresh and AtlasLootItemsFrame.refresh[1] then
-		return AtlasLootItemsFrame.refresh[1], AtlasLootItemsFrame.refresh[3]
-	end
+
 	return nil, nil
 end
 
@@ -120,7 +184,8 @@ function TalentDump.BuildAtlasLootBossDump()
 	end
 	local dataID, bossText = TalentDump.GetCurrentBossDataID()
 	if not dataID then
-		Append(output, "No boss selected. Open AtlasLoot and click a boss.")
+		Append(output, "No boss selected for this map.")
+		Append(output, "Click a boss number on the Atlas list (right panel), then dump again.")
 		Append(output, "END OF DUMP")
 		return table.concat(output, "\n")
 	end
@@ -158,17 +223,22 @@ function TalentDump.BuildAtlasLootInstanceDump()
 
 	local bosses = AtlasLootBossButtons[zoneID]
 	local total = 0
+	local dumped = 0
 	local i = 1
 	while i <= table.getn(bosses) do
 		local dataID = bosses[i]
-		if dataID and dataID ~= "" then
-			local n = TalentDump.DumpBossLootTable(output, dataID, ResolveBossName(dataID))
-			total = total + (n or 0)
-			Append(output, "")
+		if dataID and dataID ~= "" and not SKIP_TABLES[dataID] then
+			if not string.find(dataID, "Keys$") then
+				local n = TalentDump.DumpBossLootTable(output, dataID, ResolveBossName(dataID))
+				total = total + (n or 0)
+				dumped = dumped + 1
+				Append(output, "")
+			end
 		end
 		i = i + 1
 	end
 	Append(output, "================================")
+	Append(output, "Boss tables dumped: " .. dumped)
 	Append(output, "Total item rows (approx): " .. total)
 	Append(output, "END OF DUMP")
 	return table.concat(output, "\n")
@@ -186,33 +256,31 @@ function TalentDump.ShowAtlasLootInstanceDump()
 	end
 end
 
+local function MakeBtn(name, parent, text, onClick)
+	local b = CreateFrame("Button", name, parent, "UIPanelButtonTemplate")
+	b:SetWidth(88)
+	b:SetHeight(22)
+	local fs = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	fs:SetAllPoints()
+	fs:SetText(text)
+	b:SetScript("OnClick", onClick)
+	return b
+end
+
 local function PlaceButtons()
-	local parent = getglobal("AtlasLootDefaultFrame")
-	if not parent then parent = getglobal("AtlasLootItemsFrame") end
+	local atlas = getglobal("AtlasFrame")
+	local alDefault = getglobal("AtlasLootDefaultFrame")
+	local alItems = getglobal("AtlasLootItemsFrame")
+	local parent = atlas or alDefault or alItems
 	if not parent then return end
 
 	if not TalentDump.AtlasBossBtn then
-		local b1 = CreateFrame("Button", "TalentDumpAtlasBossBtn", parent, "UIPanelButtonTemplate")
-		b1:SetWidth(90)
-		b1:SetHeight(20)
-		local t1 = b1:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		t1:SetAllPoints()
-		t1:SetText("Dump Boss")
-		b1:SetScript("OnClick", function()
+		TalentDump.AtlasBossBtn = MakeBtn("TalentDumpAtlasBossBtn", parent, "Dump Boss", function()
 			TalentDump.ShowAtlasLootBossDump()
 		end)
-		TalentDump.AtlasBossBtn = b1
-
-		local b2 = CreateFrame("Button", "TalentDumpAtlasInstBtn", parent, "UIPanelButtonTemplate")
-		b2:SetWidth(90)
-		b2:SetHeight(20)
-		local t2 = b2:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-		t2:SetAllPoints()
-		t2:SetText("Dump Inst")
-		b2:SetScript("OnClick", function()
+		TalentDump.AtlasInstBtn = MakeBtn("TalentDumpAtlasInstBtn", parent, "Dump Inst", function()
 			TalentDump.ShowAtlasLootInstanceDump()
 		end)
-		TalentDump.AtlasInstBtn = b2
 	end
 
 	local b1 = TalentDump.AtlasBossBtn
@@ -221,8 +289,14 @@ local function PlaceButtons()
 	b2:SetParent(parent)
 	b1:ClearAllPoints()
 	b2:ClearAllPoints()
-	b1:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -120, -28)
-	b2:SetPoint("RIGHT", b1, "LEFT", -6, 0)
+
+	if atlas and parent == atlas then
+		b2:SetPoint("BOTTOMLEFT", atlas, "BOTTOMLEFT", 20, 48)
+		b1:SetPoint("LEFT", b2, "RIGHT", 6, 0)
+	else
+		b1:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -100, -28)
+		b2:SetPoint("RIGHT", b1, "LEFT", -6, 0)
+	end
 	b1:Show()
 	b2:Show()
 end
@@ -231,24 +305,32 @@ local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function()
-	if event == "ADDON_LOADED" and arg1 and string.find(string.lower(arg1), "atlasloot") then
-		PlaceButtons()
-	end
-	if event == "PLAYER_ENTERING_WORLD" then
-		if IsAddOnLoaded and (IsAddOnLoaded("AtlasLoot") or IsAddOnLoaded("AtlasLootEnhanced")) then
-			PlaceButtons()
-		elseif getglobal("AtlasLootDefaultFrame") or getglobal("AtlasLootItemsFrame") then
+	if event == "ADDON_LOADED" and arg1 then
+		local n = string.lower(arg1)
+		if string.find(n, "atlas") then
 			PlaceButtons()
 		end
+	end
+	if event == "PLAYER_ENTERING_WORLD" then
+		PlaceButtons()
 	end
 end)
 
 local function TryHook()
-	if AtlasLootDefaultFrame_OnShow and not TalentDump._atlasHooked then
-		local orig = AtlasLootDefaultFrame_OnShow
-		AtlasLootDefaultFrame_OnShow = function()
-			orig()
-			PlaceButtons()
+	if not TalentDump._atlasHooked then
+		if Atlas_OnShow then
+			local orig = Atlas_OnShow
+			Atlas_OnShow = function()
+				orig()
+				PlaceButtons()
+			end
+		end
+		if AtlasLootDefaultFrame_OnShow then
+			local orig2 = AtlasLootDefaultFrame_OnShow
+			AtlasLootDefaultFrame_OnShow = function()
+				orig2()
+				PlaceButtons()
+			end
 		end
 		TalentDump._atlasHooked = true
 	end
@@ -257,7 +339,8 @@ end
 local hf = CreateFrame("Frame")
 hf:SetScript("OnUpdate", function()
 	TryHook()
-	if TalentDump._atlasHooked then
+	PlaceButtons()
+	if TalentDump._atlasHooked and (getglobal("AtlasFrame") or getglobal("AtlasLootDefaultFrame")) then
 		this:SetScript("OnUpdate", nil)
 	end
 end)
