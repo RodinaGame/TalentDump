@@ -1,11 +1,10 @@
 --------------------------------------------------
 -- TalentDump AtlasLoot: dump boss / full instance loot
--- Requires AtlasLoot Enhanced (Vanilla+) loaded
+-- v3.2 — full item tooltips + button position
 --------------------------------------------------
 
 TalentDump = TalentDump or {}
 
--- Shared / non-boss tables to skip in full-instance dump
 local SKIP_TABLES = {
 	VanillaKeys = true,
 	LunarFestival1 = true,
@@ -44,13 +43,8 @@ local function GetLootTable(dataID)
 		return AtlasLoot_Data[src][dataID], src
 	end
 	local try = {
-		"AtlasLootItems",
-		"AtlasLootWBItems",
-		"AtlasLootSetItems",
-		"AtlasLootCrafting",
-		"AtlasLootGeneral",
-		"AtlasLootBP",
-		"AtlasLootRuins",
+		"AtlasLootItems", "AtlasLootWBItems", "AtlasLootSetItems",
+		"AtlasLootCrafting", "AtlasLootGeneral", "AtlasLootBP", "AtlasLootRuins",
 	}
 	local i = 1
 	while i <= table.getn(try) do
@@ -69,30 +63,81 @@ local function GetLootTable(dataID)
 	return nil, src
 end
 
-local function FormatLootEntry(entry)
-	if not entry then return nil end
+local function ItemTooltipLines(itemID)
+	if not itemID or itemID == 0 then return nil end
+	GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+	GameTooltip:ClearLines()
+	if GameTooltip.SetHyperlink then
+		GameTooltip:SetHyperlink("item:" .. tostring(itemID))
+	end
+	if GameTooltip:NumLines() < 1 then
+		GameTooltip:Hide()
+		return nil
+	end
+	return TalentDump.ReadTooltipLines()
+end
+
+local function FormatLootEntry(entry, output)
+	if not entry then return 0 end
 	local itemID = entry[1]
 	if not itemID or itemID == 0 or itemID == "" then
 		local title = entry[3]
 		if title and title ~= "" and entry[2] and entry[2] ~= "" then
-			return "### " .. TalentDump.StripAtlasText(title)
+			TalentDump.Append(output, "### " .. TalentDump.StripAtlasText(title))
 		end
-		return nil
+		return 0
 	end
+
 	local nameRaw = entry[3] or ""
 	local extraRaw = entry[4] or ""
 	local drop = entry[5] or ""
 	local q = TalentDump.QualityFromCode(nameRaw)
 	local name = TalentDump.StripAtlasText(nameRaw)
 	local extra = TalentDump.StripAtlasText(extraRaw)
-	local line = string.format("  [%s] %s | id:%s", q, name, tostring(itemID))
+
+	local header = string.format("[%s] %s | id:%s", q, name, tostring(itemID))
 	if extra and extra ~= "" then
-		line = line .. " | " .. extra
+		header = header .. " | " .. extra
 	end
 	if drop and drop ~= "" then
-		line = line .. " | " .. drop
+		header = header .. " | Drop: " .. drop
 	end
-	return line
+	TalentDump.Append(output, header)
+
+	local tips = ItemTooltipLines(itemID)
+	if tips and table.getn(tips) > 0 then
+		local i = 1
+		while i <= table.getn(tips) do
+			local t = tips[i]
+			if t and t ~= "" then
+				TalentDump.Append(output, "    " .. t)
+			end
+			i = i + 1
+		end
+	else
+		local iname, link, quality, ilvl, minlevel, itype, subtype, stack, equipLoc =
+			GetItemInfo(itemID)
+		if iname then
+			if minlevel and minlevel > 0 then
+				TalentDump.Append(output, "    Requires Level " .. minlevel)
+			end
+			if ilvl and ilvl > 0 then
+				TalentDump.Append(output, "    Item Level " .. ilvl)
+			end
+			if itype then
+				local s = itype
+				if subtype and subtype ~= "" then s = s .. ", " .. subtype end
+				TalentDump.Append(output, "    Type: " .. s)
+			end
+			if equipLoc and equipLoc ~= "" then
+				TalentDump.Append(output, "    Equip: " .. equipLoc)
+			end
+		else
+			TalentDump.Append(output, "    (tooltip not cached — hover item in AtlasLoot once)")
+		end
+	end
+	TalentDump.Append(output, "")
+	return 1
 end
 
 function TalentDump.DumpBossLootTable(output, dataID, bossTitle)
@@ -109,13 +154,7 @@ function TalentDump.DumpBossLootTable(output, dataID, bossTitle)
 	local count = 0
 	local i = 1
 	while i <= table.getn(tableData) do
-		local line = FormatLootEntry(tableData[i])
-		if line then
-			Append(output, line)
-			if string.sub(line, 1, 3) ~= "###" then
-				count = count + 1
-			end
-		end
+		count = count + FormatLootEntry(tableData[i], output)
 		i = i + 1
 	end
 	Append(output, "  Items listed: " .. count)
@@ -291,7 +330,7 @@ local function PlaceButtons()
 	b2:ClearAllPoints()
 
 	if atlas and parent == atlas then
-		b2:SetPoint("BOTTOMLEFT", atlas, "BOTTOMLEFT", 20, 48)
+		b2:SetPoint("TOPLEFT", atlas, "TOPLEFT", 18, -52)
 		b1:SetPoint("LEFT", b2, "RIGHT", 6, 0)
 	else
 		b1:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -100, -28)
