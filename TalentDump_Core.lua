@@ -94,6 +94,24 @@ function TalentDump.GetItemTooltipText(slot)
 	return TalentDump.ReadTooltipLines()
 end
 
+function TalentDump.GetBagItemTooltip(bag, slot)
+	GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+	GameTooltip:ClearLines()
+	if GameTooltip.SetBagItem then
+		GameTooltip:SetBagItem(bag, slot)
+	elseif GameTooltip.SetHyperlink then
+		local link = GetContainerItemLink(bag, slot)
+		if link then
+			GameTooltip:SetHyperlink(link)
+		end
+	end
+	if GameTooltip:NumLines() < 1 then
+		GameTooltip:Hide()
+		return nil
+	end
+	return TalentDump.ReadTooltipLines()
+end
+
 function TalentDump.GetSpellTooltip(spellIndex)
 	GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
 	GameTooltip:SetSpell(spellIndex, BOOKTYPE_SPELL)
@@ -151,6 +169,26 @@ function TalentDump.ExtractItemName(link)
 	return "?"
 end
 
+-- True for gear we may want to compare for equip advice
+function TalentDump.ShouldDumpFullTooltip(link, qualityName)
+	if not link then return false end
+	-- Uncommon / Rare / Epic / Legendary always
+	if qualityName == "Uncommon" or qualityName == "Rare"
+		or qualityName == "Epic" or qualityName == "Legendary" then
+		return true
+	end
+	-- Any equippable item (slot) — includes some white quest gear
+	local name, _, quality, _, _, _, _, _, equipLoc = GetItemInfo(link)
+	if equipLoc and equipLoc ~= "" then
+		return true
+	end
+	-- Numeric quality >= 2 if GetItemInfo worked
+	if quality and quality >= 2 then
+		return true
+	end
+	return false
+end
+
 function TalentDump.GetBagName(bag)
 	if bag == 0 then return "Backpack" end
 	local invSlot = bag + 19
@@ -176,6 +214,20 @@ function TalentDump.DumpContainer(output, bag, header)
 			local id = TalentDump.ExtractItemID(link)
 			local q = TalentDump.QualityFromLink(link)
 			TalentDump.Append(output, string.format("  %dx %s | id:%s | %s", itemCount or 1, name, id, q))
+			-- Full stats for gear so we can advise equip swaps
+			if TalentDump.ShouldDumpFullTooltip(link, q) then
+				local tips = TalentDump.GetBagItemTooltip(bag, slot)
+				if tips and table.getn(tips) > 0 then
+					local i = 1
+					while i <= table.getn(tips) do
+						local t = tips[i]
+						if t and t ~= "" then
+							TalentDump.Append(output, "    " .. t)
+						end
+						i = i + 1
+					end
+				end
+			end
 		else
 			free = free + 1
 		end
